@@ -5,7 +5,7 @@
 .travel-photos{display:grid;grid-template-columns:1.4fr 1fr;gap:34px;margin-top:55px;align-items:start}.travel-photos figure{height:480px;margin:0}.travel-photos figure+figure{height:360px;margin-top:80px}.travel-photos img{object-position:center}.socials{display:grid;grid-template-columns:1.5fr 1fr;gap:40px;align-items:center}.socials a{display:flex;align-items:center;gap:18px;border:0}.socials .blog-link{background:#b9d9ed;color:#262262;padding:27px 30px;border-radius:16px;transition:background .25s}.blog-link:hover{background:#fef8ed}.blog-link strong{font-size:24px;font-weight:400;line-height:1.4}.socials small{display:block;margin-top:6px;font-size:13px}.socials svg{flex-shrink:0;width:28px;height:28px}.blog-link>svg:last-child{margin-left:auto}.instagram-link{justify-self:end;font-size:20px}.instagram-link:hover{color:white}.controls .pill{display:inline-flex} @media(max-width:750px){.travel-photos{gap:20px;grid-template-columns:1fr}.travel-photos figure,.travel-photos figure+figure{height:390px;margin:0}.socials{grid-template-columns:1fr;gap:28px}.socials .blog-link{padding:23px 20px;gap:12px}.blog-link strong{font-size:21px}.blog-link>svg:last-child{display:none}.instagram-link{justify-self:start}.controls .pill{font-size:12px;padding-left:14px;gap:8px}.controls .pill .arrow{width:30px;height:30px}.controls .pill svg{width:20px}.brand{font-size:16px}.contact-main{padding-bottom:32px}}
 @media(min-width:751px){.hero img{object-position:50% 70%}.ural .photo img{object-position:50% 45%}}
 
-/* Free scrolling with optional deliberate fast-gesture paging. */
+/* Native scrolling; no wheel interception or forced paging. */
 html{scroll-padding-top:0;scroll-snap-type:none}
 body{position:relative;display:flow-root}
 .reveal,.js .reveal.pending{opacity:1;transform:none;transition:none}
@@ -46,34 +46,6 @@ function motionState(){
 motionState();
 motion.addEventListener('click',()=>{paused=!paused;motionState()});
 reduce.addEventListener('change',e=>{paused=e.matches;motionState()});
-// Slow gestures remain entirely native. A quick vertical gesture advances once.
-let frame=0,animating=false,lastWheel=0,gestureHandled=false,gestureStart=0,travel=0;
-function cancelPaging(){cancelAnimationFrame(frame);animating=false}
-function pageTo(target){
- cancelPaging();const start=scrollY,distance=target-start,duration=700,began=performance.now();
- animating=true;document.documentElement.style.scrollBehavior='auto';
- function step(now){const t=Math.min(1,(now-began)/duration);const ease=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;scrollTo(0,start+distance*ease);if(t<1)frame=requestAnimationFrame(step);else{animating=false;document.documentElement.style.scrollBehavior=''}}
- frame=requestAnimationFrame(step);
-}
-addEventListener('wheel',e=>{
- if(paused||reduce.matches||innerWidth<=750||e.ctrlKey||e.metaKey||Math.abs(e.deltaX)>Math.abs(e.deltaY))return;
- const now=performance.now(),delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);
- if(now-lastWheel>180){gestureHandled=false;gestureStart=now;travel=0;if(animating){cancelPaging();document.documentElement.style.scrollBehavior=''}}
- lastWheel=now;
- if(gestureHandled){e.preventDefault();return}
- travel+=Math.abs(delta);
- const quick=Math.abs(delta)>=55||(now-gestureStart<110&&travel>=95);
- if(!quick)return;
- const positions=[0,...Array.from(document.querySelectorAll('main>section:not(.hero),footer')).map(el=>el.getBoundingClientRect().top+scrollY)];
- const max=document.documentElement.scrollHeight-innerHeight;
- const candidates=positions.map(y=>Math.min(y,max));
- let target=delta>0?candidates.find(y=>y>scrollY+50):candidates.reverse().find(y=>y<scrollY-50);
- if(target===undefined)return;
- // Oversized sections retain readable intermediate screens.
- target=delta>0?Math.min(target,scrollY+innerHeight):Math.max(target,scrollY-innerHeight);
- e.preventDefault();gestureHandled=true;pageTo(target);
-},{passive:false});
-for(const event of ['pointerdown','touchstart','keydown'])addEventListener(event,()=>{cancelPaging();document.documentElement.style.scrollBehavior='';gestureHandled=false},{passive:true});
 const progress=document.querySelector('.progress'),hero=document.querySelector('.hero'),heroImage=hero.querySelector('img');let ticking=false;
 function scrollFrame(){const total=document.documentElement.scrollHeight-innerHeight;progress.style.transform=`scaleX(${total?scrollY/total:0})`;if(!paused&&scrollY<hero.offsetHeight)heroImage.style.transform=`translateY(${scrollY*.15}px) scale(1.04)`;ticking=false}
 addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(scrollFrame);ticking=true}},{passive:true});scrollFrame();
