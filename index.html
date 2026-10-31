@@ -5,7 +5,7 @@
 .travel-photos{display:grid;grid-template-columns:1.4fr 1fr;gap:34px;margin-top:55px;align-items:start}.travel-photos figure{height:480px;margin:0}.travel-photos figure+figure{height:360px;margin-top:80px}.travel-photos img{object-position:center}.socials{display:grid;grid-template-columns:1.5fr 1fr;gap:40px;align-items:center}.socials a{display:flex;align-items:center;gap:18px;border:0}.socials .blog-link{background:#b9d9ed;color:#262262;padding:27px 30px;border-radius:16px;transition:background .25s}.blog-link:hover{background:#fef8ed}.blog-link strong{font-size:24px;font-weight:400;line-height:1.4}.socials small{display:block;margin-top:6px;font-size:13px}.socials svg{flex-shrink:0;width:28px;height:28px}.blog-link>svg:last-child{margin-left:auto}.instagram-link{justify-self:end;font-size:20px}.instagram-link:hover{color:white}.controls .pill{display:inline-flex} @media(max-width:750px){.travel-photos{gap:20px;grid-template-columns:1fr}.travel-photos figure,.travel-photos figure+figure{height:390px;margin:0}.socials{grid-template-columns:1fr;gap:28px}.socials .blog-link{padding:23px 20px;gap:12px}.blog-link strong{font-size:21px}.blog-link>svg:last-child{display:none}.instagram-link{justify-self:start}.controls .pill{font-size:12px;padding-left:14px;gap:8px}.controls .pill .arrow{width:30px;height:30px}.controls .pill svg{width:20px}.brand{font-size:16px}.contact-main{padding-bottom:32px}}
 @media(min-width:751px){.hero img{object-position:50% 70%}.ural .photo img{object-position:50% 45%}}
 
-/* Native scrolling; no wheel interception or forced paging. */
+/* Free slow scroll; one eased transition per fast gesture. */
 html{scroll-padding-top:0;scroll-snap-type:none}
 body{position:relative;display:flow-root}
 .reveal,.js .reveal.pending{opacity:1;transform:none;transition:none}
@@ -46,6 +46,47 @@ function motionState(){
 motionState();
 motion.addEventListener('click',()=>{paused=!paused;motionState()});
 reduce.addEventListener('change',e=>{paused=e.matches;motionState()});
+// One fast gesture starts one uninterrupted screen transition.
+let paging=false,gestureLocked=false,lastWheelAt=0,gestureBegan=0,gestureDistance=0,pagingFrame=0;
+function stopPaging(){cancelAnimationFrame(pagingFrame);paging=false;gestureLocked=false;document.documentElement.style.scrollBehavior=''}
+function animatePage(target){
+ const from=scrollY,started=performance.now(),duration=760;
+ paging=true;gestureLocked=true;document.documentElement.style.scrollBehavior='auto';
+ function tick(now){
+  const t=Math.min(1,(now-started)/duration),eased=t*t*(3-2*t);
+  scrollTo(0,from+(target-from)*eased);
+  if(t<1)pagingFrame=requestAnimationFrame(tick);
+  else{paging=false;lastWheelAt=performance.now();document.documentElement.style.scrollBehavior=''}
+ }
+ pagingFrame=requestAnimationFrame(tick);
+}
+function wheelPaging(event){
+ if(event.ctrlKey||event.metaKey||Math.abs(event.deltaX)>Math.abs(event.deltaY)||!event.deltaY)return;
+ if(paused||reduce.matches||innerWidth<=750)return;
+ const now=performance.now(),gap=now-lastWheelAt;
+ lastWheelAt=now;
+ // Never restart or interrupt an active transition with trackpad momentum.
+ if(paging){event.preventDefault();return}
+ if(gestureLocked){
+  if(gap<260){event.preventDefault();return}
+  gestureLocked=false;
+ }
+ if(gap>160){gestureBegan=now;gestureDistance=0}
+ const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?innerHeight:1);
+ gestureDistance+=Math.abs(delta);
+ if(Math.abs(delta)<70&&!(now-gestureBegan<100&&gestureDistance>=120))return;
+ const max=document.documentElement.scrollHeight-innerHeight;
+ const boundaries=[0,...Array.from(document.querySelectorAll('main>section:not(.hero),footer')).map(el=>Math.min(max,el.getBoundingClientRect().top+scrollY))];
+ let target=delta>0?boundaries.find(y=>y>scrollY+48):boundaries.reverse().find(y=>y<scrollY-48);
+ if(target===undefined)return;
+ target=delta>0?Math.min(target,scrollY+innerHeight):Math.max(target,scrollY-innerHeight);
+ event.preventDefault();animatePage(target);
+}
+addEventListener('wheel',wheelPaging,{passive:false});
+for(const name of ['pointerdown','touchstart','keydown'])addEventListener(name,stopPaging,{passive:true});
+reduce.addEventListener('change',stopPaging);
+addEventListener('resize',stopPaging);
+
 const progress=document.querySelector('.progress'),hero=document.querySelector('.hero'),heroImage=hero.querySelector('img');let ticking=false;
 function scrollFrame(){const total=document.documentElement.scrollHeight-innerHeight;progress.style.transform=`scaleX(${total?scrollY/total:0})`;if(!paused&&scrollY<hero.offsetHeight)heroImage.style.transform=`translateY(${scrollY*.15}px) scale(1.04)`;ticking=false}
 addEventListener('scroll',()=>{if(!ticking){requestAnimationFrame(scrollFrame);ticking=true}},{passive:true});scrollFrame();
